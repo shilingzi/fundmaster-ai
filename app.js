@@ -5,11 +5,11 @@
 
 /* ─── 团队数据 ─── */
 const TEAM = [
-  { name: "Liu Zhaoxuan",  role: "Team Lead",     initials: "M1", color: "linear-gradient(135deg,#7c5cfc,#5a3fe0)" },
-  { name: "Wen Yuxuan",    role: "AI/ML Engineer", initials: "M2", color: "linear-gradient(135deg,#38bdf8,#0ea5e9)" },
-  { name: "Sun Yitao",     role: "Backend Dev",   initials: "M3", color: "linear-gradient(135deg,#10b981,#059669)" },
-  { name: "Guo Fengyuan",  role: "Frontend Dev",  initials: "M4", color: "linear-gradient(135deg,#f59e0b,#d97706)" },
-  { name: "Lim Shunyao",   role: "Data Analyst",  initials: "M5", color: "linear-gradient(135deg,#ef4444,#dc2626)" },
+  { name: "Liu Zhaoxuan",  role: "Team Member", initials: "M1", color: "linear-gradient(135deg,#7c5cfc,#5a3fe0)" },
+  { name: "Wen Yuxuan",    role: "Team Member", initials: "M2", color: "linear-gradient(135deg,#38bdf8,#0ea5e9)" },
+  { name: "Sun Yitao",     role: "Team Member", initials: "M3", color: "linear-gradient(135deg,#10b981,#059669)" },
+  { name: "Guo Fengyuan",  role: "Team Member", initials: "M4", color: "linear-gradient(135deg,#f59e0b,#d97706)" },
+  { name: "Lim Shunyao",   role: "Team Member", initials: "M5", color: "linear-gradient(135deg,#ef4444,#dc2626)" },
 ];
 
 /* ─── 里程碑数据（revisedDate 为延期前的原始日期） ─── */
