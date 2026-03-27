@@ -1,7 +1,21 @@
 /* ═══════════════════════════════════════════════════════════
    FUNDMASTER AI — Application Logic
-   拆分自原始单文件，新增主题切换 + 动态里程碑生成
+   数据层支持 Firebase 实时同步，未配置时自动回退到 localStorage
    ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────
+   ★ Firebase 配置（组长按 README 教程填写，填好后所有人数据实时同步）
+   ★ 不填的话网站照常运行，只是数据存在各自浏览器里
+   ───────────────────────────────────────────────────────── */
+const FIREBASE_CONFIG = {
+  apiKey:            "",
+  authDomain:        "",
+  databaseURL:       "",
+  projectId:         "",
+  storageBucket:     "",
+  messagingSenderId: "",
+  appId:             ""
+};
 
 /* ─── 团队数据 ─── */
 const TEAM = [
@@ -14,18 +28,18 @@ const TEAM = [
 
 /* ─── 里程碑数据（revisedDate 为延期前的原始日期） ─── */
 const MILESTONES = [
-  { title: "Detailed Project Proposal",   date: "March 27, 2026",      revisedDate: "Mar 10",  status: "done",     tag: "Milestone 01" },
-  { title: "Project Progress Update 1",   date: "April 14, 2026",      revisedDate: "Apr 7",   status: "active",   tag: "Milestone 02" },
-  { title: "Project Progress Update 2",   date: "May 5, 2026",         revisedDate: null,      status: "upcoming", tag: "Milestone 03" },
-  { title: "Interim Report & Presentation", date: "June 1, 2026",      revisedDate: null,      status: "upcoming", tag: "Milestone 04" },
-  { title: "Project Progress Update 3",   date: "June 16, 2026",       revisedDate: null,      status: "upcoming", tag: "Milestone 05" },
-  { title: "Project Progress Update 4",   date: "July 6, 2026",        revisedDate: null,      status: "upcoming", tag: "Milestone 06" },
-  { title: "Project Webpage",             date: "July 13, 2026",       revisedDate: null,      status: "upcoming", tag: "Milestone 07" },
-  { title: "Project Report",              date: "July 17, 2026",       revisedDate: null,      status: "upcoming", tag: "Milestone 08" },
-  { title: "Oral Examination",            date: "End of July 2026",    revisedDate: null,      status: "upcoming", tag: "Milestone 09" },
+  { title: "Detailed Project Proposal",     date: "March 27, 2026",    revisedDate: "Mar 10", status: "done",     tag: "Milestone 01" },
+  { title: "Project Progress Update 1",     date: "April 14, 2026",    revisedDate: "Apr 7",  status: "active",   tag: "Milestone 02" },
+  { title: "Project Progress Update 2",     date: "May 5, 2026",       revisedDate: null,     status: "upcoming", tag: "Milestone 03" },
+  { title: "Interim Report & Presentation", date: "June 1, 2026",      revisedDate: null,     status: "upcoming", tag: "Milestone 04" },
+  { title: "Project Progress Update 3",     date: "June 16, 2026",     revisedDate: null,     status: "upcoming", tag: "Milestone 05" },
+  { title: "Project Progress Update 4",     date: "July 6, 2026",      revisedDate: null,     status: "upcoming", tag: "Milestone 06" },
+  { title: "Project Webpage",               date: "July 13, 2026",     revisedDate: null,     status: "upcoming", tag: "Milestone 07" },
+  { title: "Project Report",                date: "July 17, 2026",     revisedDate: null,     status: "upcoming", tag: "Milestone 08" },
+  { title: "Oral Examination",              date: "End of July 2026",  revisedDate: null,     status: "upcoming", tag: "Milestone 09" },
 ];
 
-/* ─── 默认日志记录 ─── */
+/* ─── 默认日志（首次使用时的种子数据） ─── */
 const DEFAULT_LOGS = [
   { author: "Supervisor", tag: "supervisor", time: "Mar 28, 2026 · 09:14",
     text: "Proposal received. Good structure overall — please refine the AI model selection section before the next update.",
@@ -41,14 +55,110 @@ const DEFAULT_LOGS = [
 let isSupervisor = false;
 let currentMilestoneIdx = 0;
 
-/* ─── LocalStorage 工具 ─── */
+/* Firebase 运行时变量 */
+let _db = null;            // Firebase Database 引用
+let _dataCache = {};       // 里程碑数据缓存
+let _logsCache = null;     // 日志数据缓存
+
+/* ═══════════════════════════════════════════════
+   数据层 — 自动选择 Firebase 或 localStorage
+   ═══════════════════════════════════════════════ */
+
+/**
+ * 初始化 Firebase，成功后开启实时监听
+ * 如果配置为空则跳过，网站用 localStorage 运行
+ */
+function initFirebase() {
+  if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) {
+    console.log('[FUNDMASTER] Firebase 未配置，使用本地存储模式');
+    updateSyncBadge(false);
+    return;
+  }
+
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _db = firebase.database();
+
+    /* 监听里程碑数据变化 → 自动刷新界面 */
+    _db.ref('milestones').on('value', (snap) => {
+      _dataCache = snap.val() || {};
+      refreshDataViews();
+    });
+
+    /* 监听日志数据变化 → 自动刷新日志列表 */
+    _db.ref('logs').on('value', (snap) => {
+      const val = snap.val();
+      if (val === null) {
+        // 数据库为空，写入默认日志作为种子
+        _logsCache = [...DEFAULT_LOGS];
+        _db.ref('logs').set(_logsCache);
+      } else {
+        _logsCache = Array.isArray(val) ? val : Object.values(val);
+      }
+      renderLogs();
+    });
+
+    updateSyncBadge(true);
+    console.log('[FUNDMASTER] Firebase 已连接，数据实时同步中');
+  } catch (e) {
+    console.error('[FUNDMASTER] Firebase 初始化失败，回退到本地存储:', e);
+    _db = null;
+    updateSyncBadge(false);
+  }
+}
+
+/** 刷新所有依赖数据的视图 */
+function refreshDataViews() {
+  renderPreviews();
+  const detailPage = document.getElementById('page-detail');
+  if (detailPage && detailPage.classList.contains('active')) {
+    renderDetailPage(currentMilestoneIdx);
+  }
+}
+
+/** 更新导航栏的同步状态指示器 */
+function updateSyncBadge(online) {
+  const badge = document.getElementById('syncBadge');
+  if (!badge) return;
+  badge.textContent = online ? 'Synced' : 'Local';
+  badge.className   = online ? 'sync-badge online' : 'sync-badge offline';
+}
+
+/* ─── 读取里程碑数据 ─── */
 function loadData() {
+  if (_db) return _dataCache;
   try { return JSON.parse(localStorage.getItem('fundmaster_data') || '{}'); }
   catch { return {}; }
 }
-function saveData(data)  { localStorage.setItem('fundmaster_data', JSON.stringify(data)); }
-function loadLogs()      { try { const s = localStorage.getItem('fundmaster_logs'); return s ? JSON.parse(s) : [...DEFAULT_LOGS]; } catch { return [...DEFAULT_LOGS]; } }
-function saveLogs(logs)  { localStorage.setItem('fundmaster_logs', JSON.stringify(logs)); }
+
+/* ─── 保存里程碑数据 ─── */
+function saveData(data) {
+  if (_db) {
+    _dataCache = data;
+    _db.ref('milestones').set(data);
+  } else {
+    localStorage.setItem('fundmaster_data', JSON.stringify(data));
+  }
+}
+
+/* ─── 读取日志 ─── */
+function loadLogs() {
+  if (_db && _logsCache) return _logsCache;
+  try {
+    const s = localStorage.getItem('fundmaster_logs');
+    return s ? JSON.parse(s) : [...DEFAULT_LOGS];
+  } catch { return [...DEFAULT_LOGS]; }
+}
+
+/* ─── 保存日志 ─── */
+function saveLogs(logs) {
+  if (_db) {
+    _logsCache = logs;
+    _db.ref('logs').set(logs);
+  } else {
+    localStorage.setItem('fundmaster_logs', JSON.stringify(logs));
+  }
+}
 
 /* ═══════════════════════════════════════════════
    主题切换（亮色 / 暗色）
@@ -60,13 +170,10 @@ function initTheme() {
   } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
     document.documentElement.setAttribute('data-theme', 'light');
   }
-  // 默认无 data-theme 属性 = 暗色主题
 }
 
 function toggleTheme() {
   const html = document.documentElement;
-
-  // 添加过渡类，实现平滑换色
   html.classList.add('theme-transition');
 
   const current = html.getAttribute('data-theme');
@@ -79,8 +186,6 @@ function toggleTheme() {
   }
 
   localStorage.setItem('fundmaster_theme', next);
-
-  // 过渡完毕后移除类，避免影响其他动画
   setTimeout(() => html.classList.remove('theme-transition'), 500);
 }
 
@@ -134,7 +239,7 @@ function renderHome() {
   calcDays();
 }
 
-/* ─── 动态生成里程碑卡片（替代原来 9 段重复 HTML） ─── */
+/* ─── 动态生成里程碑卡片 ─── */
 function generateMilestoneCards() {
   const STATUS_LABELS = { done: 'Completed', active: 'In Progress', upcoming: 'Upcoming', overdue: 'Overdue' };
   const container = document.getElementById('milestoneList');
@@ -245,7 +350,9 @@ function addLog() {
   logs.push({ author, tag: isSup ? 'supervisor' : 'student', time, text, color });
   saveLogs(logs);
   document.getElementById('logInput').value = '';
-  renderLogs();
+
+  /* 本地模式需手动刷新，Firebase 模式由监听器自动刷新 */
+  if (!_db) renderLogs();
 }
 
 /* ═══════════════════════════════════════════════
@@ -336,7 +443,8 @@ function saveWork(msIdx, memberIdx) {
   document.getElementById(`badge-${msIdx}-${memberIdx}`).classList.add('show');
   document.getElementById(`edit-time-${msIdx}-${memberIdx}`).textContent = '↩ Last saved: ' + timeStr;
 
-  renderPreviews();
+  /* 本地模式手动刷新预览，Firebase 模式由监听器自动处理 */
+  if (!_db) renderPreviews();
 }
 
 /* ─── 导师只读视图 ─── */
@@ -365,19 +473,13 @@ function renderSupervisorView(msIdx) {
 }
 
 /* ═══════════════════════════════════════════════
-   事件委托（替代 inline onclick）
+   事件委托
    ═══════════════════════════════════════════════ */
 function initEventListeners() {
-  /* 导航栏 Logo → 回首页 */
   document.querySelector('.nav-logo').addEventListener('click', goHome);
-
-  /* 角色切换按钮 */
   document.querySelector('.btn-role').addEventListener('click', toggleRole);
-
-  /* 主题切换按钮 */
   document.querySelector('.theme-toggle').addEventListener('click', toggleTheme);
 
-  /* 里程碑卡片点击（事件委托） */
   document.getElementById('milestoneList').addEventListener('click', (e) => {
     const card = e.target.closest('.milestone-card');
     if (!card) return;
@@ -385,13 +487,9 @@ function initEventListeners() {
     if (!isNaN(idx)) openMilestone(idx);
   });
 
-  /* 返回按钮 */
   document.querySelector('.back-btn').addEventListener('click', goHome);
-
-  /* 发布日志按钮 */
   document.querySelector('.btn-primary').addEventListener('click', addLog);
 
-  /* 保存按钮（事件委托，因为卡片是动态生成的） */
   document.getElementById('memberWorkGrid').addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-save');
     if (!btn) return;
@@ -406,6 +504,7 @@ function initEventListeners() {
    ═══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initFirebase();
   renderHome();
   initEventListeners();
 });

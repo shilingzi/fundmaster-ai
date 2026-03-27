@@ -156,6 +156,28 @@ nav {
 
 .nav-right { display: flex; align-items: center; gap: 12px; }
 
+/* ─── 数据同步状态指示器 ─── */
+.sync-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sync-badge.online {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.sync-badge.offline {
+  background: rgba(160, 159, 204, 0.08);
+  color: var(--text3);
+  border: 1px solid var(--border);
+}
+
 .role-badge {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
