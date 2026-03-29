@@ -8,13 +8,13 @@
    ★ 不填的话网站照常运行，只是数据存在各自浏览器里
    ───────────────────────────────────────────────────────── */
 const FIREBASE_CONFIG = {
-  apiKey:            "",
-  authDomain:        "",
-  databaseURL:       "",
-  projectId:         "",
-  storageBucket:     "",
-  messagingSenderId: "",
-  appId:             ""
+  apiKey:            "AIzaSyAqPlvJ_WVWS66exdOy3vL7YHno2dgpS94",
+  authDomain:        "fundmaster-ai.firebaseapp.com",
+  databaseURL:       "https://fundmaster-ai-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "fundmaster-ai",
+  storageBucket:     "fundmaster-ai.firebasestorage.app",
+  messagingSenderId: "242803496348",
+  appId:             "1:242803496348:web:61443c03b6526b31622459"
 };
 
 /* ─── 团队数据 ─── */
